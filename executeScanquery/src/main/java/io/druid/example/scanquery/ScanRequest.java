@@ -1,18 +1,14 @@
 package io.druid.example.scanquery;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import org.apache.http.HttpResponse;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -42,7 +38,7 @@ public class ScanRequest
 
     private void sendPost(String payloadLocation) throws Exception {
 
-        String url = "http://localhost:8888/druid/v2/?pretty";
+        String url = "http://localhost:8888/druid/v2/";
 
         List<String> lines = Collections.emptyList();
         lines  = Files.readAllLines(Paths.get(payloadLocation), StandardCharsets.UTF_8);
@@ -51,14 +47,14 @@ public class ScanRequest
         while (itr.hasNext())
             payload.append(itr.next());
 
-        CredentialsProvider provider = new BasicCredentialsProvider();
-        provider.setCredentials(0
-            AuthScope.ANY,
-            new UsernamePasswordCredentials("tthomas", "abcd")
-        );
-        try (CloseableHttpClient client = HttpClientBuilder.create().
-                    setDefaultCredentialsProvider(provider).build()) {
-
+//        CredentialsProvider provider = new BasicCredentialsProvider();
+//        provider.setCredentials(0
+//            AuthScope.ANY,
+//            new UsernamePasswordCredentials("tthomas", "abcd")
+//        );
+//        try (CloseableHttpClient client = HttpClientBuilder.create().
+//                    setDefaultCredentialsProvider(provider).build()) {
+        try (CloseableHttpClient client = HttpClientBuilder.create().build()){
             HttpPost request = new HttpPost(url);
             request.setHeader("User-Agent", "Java client");
             request.setHeader("Content-Type","application/json");
@@ -66,15 +62,39 @@ public class ScanRequest
 
             request.setEntity(new StringEntity(payload.toString()));
             HttpResponse response = client.execute(request);
-            BufferedReader bufReader = new BufferedReader(new InputStreamReader(
-                response.getEntity().getContent()));
-            String line ="";
-            StringBuilder builder = new StringBuilder();
-            while ((line = bufReader.readLine()) != null) {
-                builder.append(line);
-                builder.append(System.lineSeparator());
+
+            InputStreamReader reader = new InputStreamReader(response.getEntity().getContent());
+            JsonFactory jf = new JsonFactory();
+            JsonParser jp = jf.createParser(reader);
+         //  JsonParser jp = jf.createParser(ObjectReadContext.empty(), new ByteArrayInputStream(DOC.getBytes("UTF-8")));
+            JsonToken current;
+            while (jp.nextToken() != JsonToken.END_OBJECT) {
+                String fieldName = jp.getCurrentName();
+                // move from field name to field value
+                jp.nextToken();
+                jp.nextToken();
+                jp.nextToken();
+                System.out.println("Segement id : "+ jp.getValueAsString());
+                jp.nextToken() ;
+                if (jp.getValueAsString().equalsIgnoreCase("columns")){
+                    while (jp.nextToken() != JsonToken.END_ARRAY) {
+                        System.out.println("Columns : "+ jp.getValueAsString());
+                    }
+                }
+                jp.nextToken() ;
+                if (jp.getValueAsString().equalsIgnoreCase("events")){
+                    System.out.println("Events : ");
+                    jp.nextToken();
+                    while (jp.nextToken() != JsonToken.END_ARRAY) {
+//                      TreeNode tree= jp.readValueAsTree();
+                        while (jp.nextToken() != JsonToken.END_OBJECT) {
+                            System.out.print( jp.getValueAsString() + "  " );
+                        }
+                        System.out.print( "\n");
+                    }
+                }
+
             }
-            System.out.println(builder.toString());
         }
     }
 }
